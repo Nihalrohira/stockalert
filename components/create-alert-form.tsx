@@ -29,7 +29,7 @@ export interface CreateAlertFormPayload {
 
 interface CreateAlertFormProps {
   telegramConnected: boolean
-  onSubmit?: (data: CreateAlertFormPayload) => void
+  onSubmit?: (data: CreateAlertFormPayload) => void | Promise<void>
 }
 
 export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertFormProps) {
@@ -61,13 +61,13 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
     setTargetPrice(price.toFixed(2))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!telegramConnected || !selectedStock || !targetPrice) return
     const parsedTarget = parseFloat(targetPrice)
     if (Number.isNaN(parsedTarget) || parsedTarget <= 0) return
 
-    onSubmit?.({
+    const payload: CreateAlertFormPayload = {
       stockSymbol: selectedStock.symbol,
       stockName: selectedStock.company,
       exchange: selectedStock.exchange,
@@ -75,12 +75,17 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
       targetPrice: parsedTarget,
       condition,
       validUntil: validUntil.trim() === '' ? null : validUntil.trim(),
-    })
+    }
 
-    setSelectedStock(null)
-    setTargetPrice('')
-    setCondition('above')
-    setValidUntil('')
+    try {
+      await onSubmit?.(payload)
+      setSelectedStock(null)
+      setTargetPrice('')
+      setCondition('above')
+      setValidUntil('')
+    } catch {
+      // Parent logs; keep form values so the user can retry.
+    }
   }
 
   const canSubmit = telegramConnected && selectedStock && targetPrice.length > 0
@@ -99,7 +104,7 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
             Connect Telegram to create alerts. Alerts are tied to your Telegram account.
           </p>
         )}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
           <div className="space-y-2">
             <Label className="text-sm font-medium">Select Stock</Label>
             <StockAutocomplete onSelect={setSelectedStock} selectedStock={selectedStock} />

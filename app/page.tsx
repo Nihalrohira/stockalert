@@ -8,9 +8,19 @@ import type { CreateAlertFormPayload } from '@/components/create-alert-form'
 import { AlertsTable } from '@/components/alerts-table'
 import { TelegramOnboardingModal } from '@/components/telegram-onboarding-modal'
 import { EmptyState } from '@/components/empty-state'
+import { Spinner } from '@/components/ui/spinner'
 import { Zap, Bell, LogOut } from 'lucide-react'
 import type { Alert } from '@/types/alert'
-import { readAlertsFromStorage, writeAlertsToStorage, createAlertId } from '@/lib/alert-storage'
+import { dbAlertRowToUi } from '@/lib/alert-mapper'
+import {
+  deleteAlertForTelegramUser,
+  fetchAlertsForTelegramUser,
+  insertAlertForTelegramUser,
+  markAlertTriggeredForTelegramUser,
+  updateAlertPausedForTelegramUser,
+} from '@/lib/alerts-repository'
+import { logSupabaseError } from '@/lib/supabase-errors'
+import { supabase } from '@/lib/supabase'
 
 const TELEGRAM_STORAGE_KEY = 'stockalert_telegram_user'
 
@@ -43,24 +53,57 @@ function readTelegramUserFromStorage(): TelegramUser | null {
 
 export default function Dashboard() {
   const [hydrated, setHydrated] = useState(false)
-  const [alertsLoaded, setAlertsLoaded] = useState(false)
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
+  const [alertsLoading, setAlertsLoading] = useState(false)
   const [connectModalState, setConnectModalState] = useState<'idle' | 'connecting'>('idle')
-  const connectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectTimerRef = useRef<number | null>(null)
   const createSectionRef = useRef<HTMLDivElement>(null)
+  const [supabaseTest, setSupabaseTest] = useState<{
+    status: 'idle' | 'loading' | 'ok' | 'error'
+    message?: string
+  }>({ status: 'idle' })
+
+  const loadAlerts = useCallback(
+    async (showLoading: boolean) => {
+      if (!telegramUser) {
+        setAlerts([])
+        return
+      }
+      if (showLoading) {
+        setAlertsLoading(true)
+      }
+      try {
+        const rows = await fetchAlertsForTelegramUser(telegramUser.chatId, telegramUser.username)
+        setAlerts(rows.map((r) => dbAlertRowToUi(r, telegramUser.chatId)))
+      } catch (e) {
+        logSupabaseError('[dashboard] loadAlerts failed', e)
+        setAlerts([])
+      } finally {
+        if (showLoading) {
+          setAlertsLoading(false)
+        }
+      }
+    },
+    [telegramUser]
+  )
 
   useEffect(() => {
     setTelegramUser(readTelegramUserFromStorage())
-    setAlerts(readAlertsFromStorage())
     setHydrated(true)
-    setAlertsLoaded(true)
   }, [])
 
   useEffect(() => {
-    if (!alertsLoaded) return
-    writeAlertsToStorage(alerts)
-  }, [alerts, alertsLoaded])
+    if (!hydrated) {
+      return
+    }
+    if (!telegramUser) {
+      setAlerts([])
+      setAlertsLoading(false)
+      return
+    }
+    void loadAlerts(true)
+  }, [hydrated, telegramUser, loadAlerts])
 
   useEffect(() => {
     return () => {
@@ -77,7 +120,7 @@ export default function Dashboard() {
     if (connectModalState === 'connecting') return
     if (connectTimerRef.current != null) return
     setConnectModalState('connecting')
-    connectTimerRef.current = window.setTimeout(() => {
+    const timerId = window.setTimeout(() => {
       connectTimerRef.current = null
       const user: TelegramUser = {
         username: 'john_trader',
@@ -91,6 +134,7 @@ export default function Dashboard() {
       setTelegramUser(user)
       setConnectModalState('idle')
     }, 1000)
+    connectTimerRef.current = timerId
   }, [connectModalState])
 
   const handleSignOut = useCallback(() => {
@@ -108,58 +152,116 @@ export default function Dashboard() {
   }, [])
 
   const handleCreateAlert = useCallback(
-    (data: CreateAlertFormPayload) => {
+    async (data: CreateAlertFormPayload) => {
       if (!telegramUser) return
-      const now = new Date().toISOString()
-      const newAlert: Alert = {
-        id: createAlertId(),
-        telegramChatId: telegramUser.chatId,
-        stockSymbol: data.stockSymbol,
-        stockName: data.stockName,
-        exchange: data.exchange,
-        currentPrice: data.currentPrice,
-        targetPrice: data.targetPrice,
-        condition: data.condition,
-        validUntil: data.validUntil,
-        status: 'active',
-        createdAt: now,
-        triggeredAt: null,
+      try {
+        await insertAlertForTelegramUser(telegramUser.chatId, telegramUser.username, {
+          stock_symbol: data.stockSymbol,
+          stock_name: data.stockName,
+          exchange: data.exchange,
+          current_price: data.currentPrice,
+          target_price: data.targetPrice,
+          condition: data.condition,
+          valid_until: data.validUntil,
+        })
+        await loadAlerts(false)
+      } catch (e) {
+        logSupabaseError('[dashboard] create alert failed', e)
+        throw e
       }
-      setAlerts((prev) => [newAlert, ...prev])
     },
-    [telegramUser]
+    [telegramUser, loadAlerts]
   )
 
-  const handlePauseAlert = useCallback((id: string) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id && a.status === 'active' ? { ...a, status: 'paused' as const } : a))
-    )
-  }, [])
-
-  const handleResumeAlert = useCallback((id: string) => {
-    setAlerts((prev) =>
-      prev.map((a) => (a.id === id && a.status === 'paused' ? { ...a, status: 'active' as const } : a))
-    )
-  }, [])
-
-  const handleDeleteAlert = useCallback((id: string) => {
-    setAlerts((prev) => prev.filter((a) => a.id !== id))
-  }, [])
-
-  const handleSimulateTrigger = useCallback(() => {
-    setAlerts((prev) => {
-      const idx = prev.findIndex((a) => a.status === 'active')
-      if (idx === -1) return prev
-      const copy = [...prev]
-      const hit = copy[idx]
-      copy[idx] = {
-        ...hit,
-        status: 'triggered',
-        triggeredAt: new Date().toISOString(),
+  const handlePauseAlert = useCallback(
+    async (id: string) => {
+      if (!telegramUser) return
+      try {
+        await updateAlertPausedForTelegramUser(telegramUser.chatId, telegramUser.username, id, true)
+        await loadAlerts(false)
+      } catch (e) {
+        logSupabaseError('[dashboard] pause alert failed', e)
       }
-      return copy
-    })
+    },
+    [telegramUser, loadAlerts]
+  )
+
+  const handleResumeAlert = useCallback(
+    async (id: string) => {
+      if (!telegramUser) return
+      try {
+        await updateAlertPausedForTelegramUser(telegramUser.chatId, telegramUser.username, id, false)
+        await loadAlerts(false)
+      } catch (e) {
+        logSupabaseError('[dashboard] resume alert failed', e)
+      }
+    },
+    [telegramUser, loadAlerts]
+  )
+
+  const handleDeleteAlert = useCallback(
+    async (id: string) => {
+      if (!telegramUser) return
+      try {
+        await deleteAlertForTelegramUser(telegramUser.chatId, telegramUser.username, id)
+        await loadAlerts(false)
+      } catch (e) {
+        logSupabaseError('[dashboard] delete alert failed', e)
+      }
+    },
+    [telegramUser, loadAlerts]
+  )
+
+  const handleSimulateTrigger = useCallback(async () => {
+    if (!telegramUser) return
+    const firstActive = alerts.find((a) => a.status === 'active')
+    if (!firstActive) return
+    try {
+      await markAlertTriggeredForTelegramUser(telegramUser.chatId, telegramUser.username, firstActive.id)
+      await loadAlerts(false)
+    } catch (e) {
+      logSupabaseError('[dashboard] simulate trigger failed', e)
+    }
+  }, [alerts, telegramUser, loadAlerts])
+
+  const handleTestSupabase = useCallback(async () => {
+    setSupabaseTest({ status: 'loading' })
+    const { error } = await supabase
+      .from('users')
+      .select('id, telegram_username, created_at')
+      .limit(1)
+    if (error) {
+      logSupabaseError('[dashboard] Test Supabase users query', error)
+      setSupabaseTest({ status: 'error', message: error.message })
+    } else {
+      setSupabaseTest({ status: 'ok', message: 'Supabase connected' })
+    }
   }, [])
+
+  const handleCheckAlertsNow = useCallback(async () => {
+    if (!telegramUser) return
+    try {
+      const res = await fetch('/api/alerts/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramChatId: telegramUser.chatId,
+          telegramUsername: telegramUser.username,
+        }),
+      })
+      const data = (await res.json()) as { ok?: boolean; error?: string; summary?: unknown }
+      if (!res.ok || !data.ok) {
+        console.error('[dashboard] Check Alerts Now failed', data.error ?? res.statusText, data)
+        return
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[dashboard] Check Alerts Now summary', data.summary)
+      }
+      await loadAlerts(false)
+    } catch (e) {
+      console.error('[dashboard] Check Alerts Now failed', e)
+    }
+  }, [telegramUser, loadAlerts])
 
   const activeOrPausedAlerts = alerts.filter((a) => a.status === 'active' || a.status === 'paused')
   const triggeredAlerts = alerts.filter((a) => a.status === 'triggered')
@@ -210,6 +312,16 @@ export default function Dashboard() {
           <CreateAlertForm telegramConnected={telegramConnected} onSubmit={handleCreateAlert} />
         </div>
 
+        {telegramConnected && alertsLoading && (
+          <div
+            className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground mb-4"
+            aria-live="polite"
+          >
+            <Spinner className="size-5" />
+            Loading alerts…
+          </div>
+        )}
+
         <div className="mb-12">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -226,12 +338,12 @@ export default function Dashboard() {
             <AlertsTable
               variant="active"
               alerts={activeOrPausedAlerts}
-              onPause={handlePauseAlert}
-              onResume={handleResumeAlert}
-              onDelete={handleDeleteAlert}
+              onPause={(id) => void handlePauseAlert(id)}
+              onResume={(id) => void handleResumeAlert(id)}
+              onDelete={(id) => void handleDeleteAlert(id)}
             />
           ) : (
-            <EmptyState type="active" onCreateAlert={scrollToCreate} />
+            !alertsLoading && <EmptyState type="active" onCreateAlert={scrollToCreate} />
           )}
         </div>
 
@@ -250,21 +362,48 @@ export default function Dashboard() {
           {triggeredAlerts.length > 0 ? (
             <AlertsTable variant="triggered" alerts={triggeredAlerts} />
           ) : (
-            <EmptyState type="triggered" />
+            !alertsLoading && <EmptyState type="triggered" />
           )}
         </div>
 
         {process.env.NODE_ENV === 'development' && (
-          <div className="mt-12 pt-6 border-t border-border/40 flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-xs text-muted-foreground/80 font-normal h-8 px-2"
-              onClick={handleSimulateTrigger}
-            >
-              Simulate Trigger
-            </Button>
+          <div className="mt-12 pt-6 border-t border-border/40 flex flex-col items-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground/80 font-normal h-8 px-2"
+                disabled={supabaseTest.status === 'loading'}
+                onClick={() => void handleTestSupabase()}
+              >
+                {supabaseTest.status === 'loading' ? 'Testing…' : 'Test Supabase'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground/80 font-normal h-8 px-2"
+                onClick={() => void handleCheckAlertsNow()}
+              >
+                Check Alerts Now
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground/80 font-normal h-8 px-2"
+                onClick={() => void handleSimulateTrigger()}
+              >
+                Simulate Trigger
+              </Button>
+            </div>
+            {supabaseTest.status === 'ok' && (
+              <p className="text-xs text-green-500/90 max-w-md text-right">{supabaseTest.message}</p>
+            )}
+            {supabaseTest.status === 'error' && (
+              <p className="text-xs text-destructive max-w-md text-right break-words">{supabaseTest.message}</p>
+            )}
           </div>
         )}
       </main>
