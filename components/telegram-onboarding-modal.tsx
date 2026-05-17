@@ -74,7 +74,7 @@ export function TelegramOnboardingModal({
           {showConnecting ? (
             <div className="space-y-4">
               <p className="text-sm font-medium text-foreground text-center">
-                Telegram has opened. Tap START in the bot chat.
+                Telegram will open. Click OPEN IN WEB, then press Start in the bot chat.
               </p>
               <Button type="button" variant="secondary" className="w-full" onClick={openDeepLink}>
                 Open Telegram Again
@@ -107,9 +107,9 @@ export function TelegramOnboardingModal({
                   <div className="w-0.5 h-12 bg-border mt-2" />
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Click Connect Telegram</p>
+                  <p className="font-medium text-foreground">Open Telegram Web</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    We open Telegram with our bot so you can link your account in one tap.
+                    We open Telegram with our bot so you can link your account.
                   </p>
                 </div>
               </div>
@@ -122,10 +122,10 @@ export function TelegramOnboardingModal({
                   <div className="w-0.5 h-12 bg-border mt-2" />
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Tap START</p>
+                  <p className="font-medium text-foreground">OPEN IN WEB, then Start</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    In the chat with <span className="font-mono text-foreground">@{botDisplay}</span>, tap the START
-                    button when prompted.
+                    On the Telegram page, choose OPEN IN WEB, then press Start in the chat with{' '}
+                    <span className="font-mono text-foreground">@{botDisplay}</span>.
                   </p>
                 </div>
               </div>
@@ -139,7 +139,7 @@ export function TelegramOnboardingModal({
                 <div className="pt-1">
                   <p className="font-medium text-foreground">Return here</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    This page connects automatically after you tap START.
+                    This page connects automatically after you press Start.
                   </p>
                 </div>
               </div>
@@ -164,7 +164,7 @@ export function TelegramOnboardingModal({
                 Please wait...
               </>
             ) : (
-              'Connect Telegram'
+              'Open Telegram Web'
             )}
           </Button>
         </div>
