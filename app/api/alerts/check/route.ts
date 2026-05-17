@@ -17,17 +17,6 @@ type UserCheckResult = {
   summary: AlertCheckSummary
 }
 
-/** Optional bearer check when CRON_SECRET is set (skipped when unset). */
-function cronAuthFailure(request: Request): NextResponse | null {
-  const secret = process.env.CRON_SECRET?.trim()
-  if (!secret) return null
-
-  const auth = request.headers.get('authorization')
-  if (auth === `Bearer ${secret}`) return null
-
-  return NextResponse.json({ success: false, ok: false, error: 'Unauthorized' }, { status: 401 })
-}
-
 async function fetchConnectedUsers(): Promise<ConnectedUser[]> {
   const { data, error } = await supabase
     .from('users')
@@ -84,10 +73,7 @@ async function runAlertCheckForUser(
   return runAlertCheckOnce(telegramChatId, telegramUsername)
 }
 
-export async function GET(request: Request) {
-  const denied = cronAuthFailure(request)
-  if (denied) return denied
-
+export async function GET() {
   try {
     const { results, checked, triggered } = await runAlertCheckForAllConnectedUsers()
 
