@@ -22,6 +22,7 @@ import {
 import { logSupabaseError } from '@/lib/supabase-errors'
 import { supabase } from '@/lib/supabase'
 import { formatTelegramUserLabel } from '@/lib/telegram-identity'
+import { buildTelegramBotDeepLink, buildTelegramWebUrl } from '@/lib/telegram-deep-link'
 
 const TELEGRAM_STORAGE_KEY = 'stockalert_telegram_user'
 
@@ -154,21 +155,9 @@ export default function Dashboard() {
         }
 
         const raw = await res.text()
-        let data: {
-          ok?: boolean
-          pollKey?: string
-          startCommand?: string
-          telegramWebUrl?: string
-          error?: string
-        }
+        let data: { ok?: boolean; pollKey?: string; error?: string }
         try {
-          data = JSON.parse(raw) as {
-            ok?: boolean
-            pollKey?: string
-            startCommand?: string
-            telegramWebUrl?: string
-            error?: string
-          }
+          data = JSON.parse(raw) as { ok?: boolean; pollKey?: string; error?: string }
         } catch {
           console.error('[dashboard] Telegram prepare: expected JSON', {
             status: res.status,
@@ -179,25 +168,21 @@ export default function Dashboard() {
           return
         }
 
-        if (
-          !res.ok ||
-          data.ok !== true ||
-          !data.pollKey ||
-          !data.startCommand ||
-          !data.telegramWebUrl
-        ) {
+        const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, '')
+        if (!res.ok || data.ok !== true || !data.pollKey || !botUsername) {
           console.error('[dashboard] Telegram prepare failed', data.error ?? res.status, data)
           setConnectModalState('idle')
           setConnectSession(null)
           return
         }
-        setConnectSession({
-          pollKey: data.pollKey,
-          startCommand: data.startCommand,
-          telegramWebUrl: data.telegramWebUrl,
-        })
-        const started = Date.now()
+
         const pollKey = data.pollKey
+        const deepLinkUrl = buildTelegramBotDeepLink(pollKey, botUsername)
+        const telegramWebUrl = buildTelegramWebUrl(botUsername)
+
+        setConnectSession({ pollKey, deepLinkUrl, telegramWebUrl })
+        window.open(deepLinkUrl, '_blank', 'noopener,noreferrer')
+        const started = Date.now()
         const iv = window.setInterval(() => {
           void (async () => {
             if (Date.now() - started > 180_000) {

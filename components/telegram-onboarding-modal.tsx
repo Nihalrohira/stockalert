@@ -1,23 +1,20 @@
-'use client'
+﻿'use client'
 
-import { useEffect, useState } from 'react'
-import { MessageCircle, Loader, Copy, ExternalLink } from 'lucide-react'
+import { useEffect } from 'react'
+import { MessageCircle, Loader, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export interface TelegramConnectSessionProps {
   pollKey: string
-  startCommand: string
-  telegramWebUrl: string
+  deepLinkUrl: string
+  telegramWebUrl?: string
 }
 
 interface TelegramOnboardingModalProps {
   state: 'idle' | 'connecting'
   onConnect: () => void
-  /** When false, Connect is disabled (e.g. before localStorage hydration). */
   allowConnect?: boolean
-  /** Bot username without @ (from NEXT_PUBLIC_TELEGRAM_BOT_USERNAME). */
   telegramBotUsername?: string
-  /** After prepare succeeds: command and Telegram Web URL from the API. */
   connectSession?: TelegramConnectSessionProps | null
 }
 
@@ -29,15 +26,15 @@ export function TelegramOnboardingModal({
   connectSession = null,
 }: TelegramOnboardingModalProps) {
   const botDisplay = (telegramBotUsername ?? 'your_bot').replace(/^@/, '')
-  const startCommand = connectSession?.startCommand ?? ''
-  const telegramWebUrl = connectSession?.telegramWebUrl ?? ''
-  const [copyHint, setCopyHint] = useState<'idle' | 'copied' | 'error'>('idle')
+  const deepLinkUrl = connectSession?.deepLinkUrl ?? ''
+  const telegramWebUrl =
+    connectSession?.telegramWebUrl ?? `https://web.telegram.org/k/#@${botDisplay}`
 
-  useEffect(() => {
-    setCopyHint('idle')
-  }, [connectSession?.pollKey])
+  const openDeepLink = () => {
+    if (!deepLinkUrl) return
+    window.open(deepLinkUrl, '_blank', 'noopener,noreferrer')
+  }
 
-  // Prevent body scroll when modal is visible
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => {
@@ -45,42 +42,23 @@ export function TelegramOnboardingModal({
     }
   }, [])
 
-  // Prevent escape key from closing
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-      }
+      if (e.key === 'Escape') e.preventDefault()
     }
-
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const handleCopyCommand = async () => {
-    if (!startCommand) return
-    try {
-      await navigator.clipboard.writeText(startCommand)
-      setCopyHint('copied')
-      window.setTimeout(() => setCopyHint('idle'), 2000)
-    } catch {
-      setCopyHint('error')
-      window.setTimeout(() => setCopyHint('idle'), 2500)
-    }
-  }
-
-  const showCommandInstructions = state === 'connecting' && connectSession
+  const showConnecting = state === 'connecting' && connectSession
   const showPreparing = state === 'connecting' && !connectSession
 
   return (
     <>
-      {/* Blurred backdrop — above app chrome; no click handler (does not close). */}
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]" aria-hidden />
 
-      {/* Modal */}
       <div className="fixed inset-0 z-[101] flex items-center justify-center px-4 pointer-events-none">
         <div className="bg-card border border-border rounded-lg shadow-xl max-w-md w-full space-y-6 p-8 pointer-events-auto">
-          {/* Header */}
           <div className="text-center space-y-3">
             <div className="flex justify-center">
               <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -93,47 +71,31 @@ export function TelegramOnboardingModal({
             </p>
           </div>
 
-          {showCommandInstructions ? (
+          {showConnecting ? (
             <div className="space-y-4">
-              <p className="text-sm font-medium text-foreground">Send this command to the bot:</p>
-              <pre className="text-left text-sm font-mono bg-muted/80 border border-border rounded-md px-3 py-2 break-all whitespace-pre-wrap">
-                {startCommand}
-              </pre>
-              <p className="text-xs text-muted-foreground">
-                In Telegram Web, open a private chat with{' '}
-                <span className="font-mono text-foreground">@{botDisplay}</span>.
+              <p className="text-sm font-medium text-foreground text-center">
+                Telegram has opened. Tap START in the bot chat.
               </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => void handleCopyCommand()}
+              <Button type="button" variant="secondary" className="w-full" onClick={openDeepLink}>
+                Open Telegram Again
+              </Button>
+              <p className="text-xs text-center text-muted-foreground">
+                Using Telegram Web instead?{' '}
+                <a
+                  href={telegramWebUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                 >
-                  <Copy className="w-4 h-4 mr-2 shrink-0" />
-                  Copy Command
-                </Button>
-                <Button type="button" variant="secondary" size="sm" className="flex-1" asChild>
-                  <a href={telegramWebUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-4 h-4 mr-2 shrink-0" />
-                    Open Telegram Web
-                  </a>
-                </Button>
-              </div>
-              {copyHint === 'copied' && (
-                <p className="text-xs text-green-600 dark:text-green-400">Copied to clipboard</p>
-              )}
-              {copyHint === 'error' && (
-                <p className="text-xs text-destructive">Could not copy — select and copy manually</p>
-              )}
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  Open @{botDisplay} in Telegram Web
+                </a>
+              </p>
             </div>
           ) : showPreparing ? (
-            <div className="space-y-4">
-              <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-3">
-                <Loader className="w-5 h-5 text-primary animate-spin shrink-0" />
-                <p className="text-sm text-foreground">Preparing your Telegram link…</p>
-              </div>
+            <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-3">
+              <Loader className="w-5 h-5 text-primary animate-spin shrink-0" />
+              <p className="text-sm text-foreground">Opening Telegram…</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -147,8 +109,7 @@ export function TelegramOnboardingModal({
                 <div className="pt-1">
                   <p className="font-medium text-foreground">Click Connect Telegram</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    We will show you the exact <span className="font-mono text-foreground">/start …</span>{' '}
-                    command to paste in Telegram Web
+                    We open Telegram with our bot so you can link your account in one tap.
                   </p>
                 </div>
               </div>
@@ -161,10 +122,10 @@ export function TelegramOnboardingModal({
                   <div className="w-0.5 h-12 bg-border mt-2" />
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Use Telegram Web</p>
+                  <p className="font-medium text-foreground">Tap START</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Open Telegram Web, find <span className="font-mono text-foreground">@{botDisplay}</span>, and
-                    send the command we show you
+                    In the chat with <span className="font-mono text-foreground">@{botDisplay}</span>, tap the START
+                    button when prompted.
                   </p>
                 </div>
               </div>
@@ -176,8 +137,10 @@ export function TelegramOnboardingModal({
                   </div>
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Return here and continue</p>
-                  <p className="text-sm text-muted-foreground mt-1">Connection will be confirmed automatically</p>
+                  <p className="font-medium text-foreground">Return here</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    This page connects automatically after you tap START.
+                  </p>
                 </div>
               </div>
             </div>
@@ -186,7 +149,7 @@ export function TelegramOnboardingModal({
           {state === 'connecting' && connectSession && (
             <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-3">
               <Loader className="w-5 h-5 text-primary animate-spin shrink-0" />
-              <p className="text-sm text-foreground">Waiting for your /start message in Telegram…</p>
+              <p className="text-sm text-foreground">Confirming your connection…</p>
             </div>
           )}
 
