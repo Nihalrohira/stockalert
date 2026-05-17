@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { runAlertCheckOnce } from '@/lib/alert-checker'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function POST(request: Request) {
   try {

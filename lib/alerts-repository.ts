@@ -27,6 +27,8 @@ function parseDbAlertRow(raw: unknown): DbAlertRow | null {
   if (typeof r.stock_symbol !== 'string') return null
   if (typeof r.stock_name !== 'string') return null
   if (typeof r.exchange !== 'string') return null
+  const instrumentKey =
+    typeof r.instrument_key === 'string' && r.instrument_key.trim() !== '' ? r.instrument_key.trim() : null
   const targetPrice = parseNum(r.target_price)
   const currentPrice = parseNum(r.current_price)
   if (targetPrice === null || currentPrice === null) return null
@@ -39,6 +41,7 @@ function parseDbAlertRow(raw: unknown): DbAlertRow | null {
   return {
     id: r.id,
     user_id: r.user_id,
+    instrument_key: instrumentKey,
     stock_symbol: r.stock_symbol,
     stock_name: r.stock_name,
     exchange: r.exchange,
@@ -73,6 +76,7 @@ export async function findOrCreateUserId(telegramChatId: string, telegramUsernam
     .insert({
       telegram_chat_id: telegramChatId,
       telegram_username: telegramUsername,
+      telegram_connected: false,
     })
     .select('id')
     .single()
@@ -151,6 +155,7 @@ export async function insertAlertForTelegramUser(
   telegramChatId: string,
   telegramUsername: string,
   input: {
+    instrument_key: string
     stock_symbol: string
     stock_name: string
     exchange: 'NSE' | 'BSE'
@@ -166,6 +171,7 @@ export async function insertAlertForTelegramUser(
     .from('alerts')
     .insert({
       user_id: userId,
+      instrument_key: input.instrument_key,
       stock_symbol: input.stock_symbol,
       stock_name: input.stock_name,
       exchange: input.exchange,

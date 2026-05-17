@@ -7,6 +7,7 @@ export interface DbUserRow {
   id: string
   telegram_chat_id: string
   telegram_username: string
+  telegram_connected: boolean
   created_at: string
 }
 
@@ -14,6 +15,8 @@ export interface DbUserRow {
 export interface DbAlertRow {
   id: string
   user_id: string
+  /** Upstox instrument key for LTP (e.g. NSE_EQ|INE002A01018); null for legacy rows. */
+  instrument_key: string | null
   stock_symbol: string
   stock_name: string
   exchange: string
@@ -30,6 +33,7 @@ export interface DbAlertRow {
 export interface Alert {
   id: string
   telegramChatId: string
+  instrumentKey: string | null
   stockSymbol: string
   stockName: string
   exchange: 'NSE' | 'BSE'

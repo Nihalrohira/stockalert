@@ -5,6 +5,7 @@ export function dbAlertRowToUi(row: DbAlertRow, telegramChatId: string): Alert {
   return {
     id: row.id,
     telegramChatId,
+    instrumentKey: row.instrument_key,
     stockSymbol: row.stock_symbol,
     stockName: row.stock_name,
     exchange,

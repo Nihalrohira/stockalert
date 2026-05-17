@@ -8,16 +8,10 @@ import { Label } from '@/components/ui/label'
 import { StockAutocomplete } from './stock-autocomplete'
 import { Plus } from 'lucide-react'
 import type { AlertCondition } from '@/types/alert'
-
-interface Stock {
-  symbol: string
-  company: string
-  exchange: 'NSE' | 'BSE'
-  price: number
-  change: number
-}
+import type { SelectedInstrumentStock } from '@/types/instrument'
 
 export interface CreateAlertFormPayload {
+  instrumentKey: string
   stockSymbol: string
   stockName: string
   exchange: 'NSE' | 'BSE'
@@ -33,7 +27,7 @@ interface CreateAlertFormProps {
 }
 
 export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertFormProps) {
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
+  const [selectedStock, setSelectedStock] = useState<SelectedInstrumentStock | null>(null)
   const [targetPrice, setTargetPrice] = useState('')
   const [condition, setCondition] = useState<AlertCondition>('above')
   const [validUntil, setValidUntil] = useState('')
@@ -68,6 +62,7 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
     if (Number.isNaN(parsedTarget) || parsedTarget <= 0) return
 
     const payload: CreateAlertFormPayload = {
+      instrumentKey: selectedStock.instrumentKey,
       stockSymbol: selectedStock.symbol,
       stockName: selectedStock.company,
       exchange: selectedStock.exchange,

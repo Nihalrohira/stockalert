@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { CreateAlertForm } from '@/components/create-alert-form'
 import type { CreateAlertFormPayload } from '@/components/create-alert-form'
 import { AlertsTable } from '@/components/alerts-table'
-import { TelegramOnboardingModal } from '@/components/telegram-onboarding-modal'
+import { TelegramOnboardingModal, type TelegramConnectSessionProps } from '@/components/telegram-onboarding-modal'
 import { EmptyState } from '@/components/empty-state'
 import { Spinner } from '@/components/ui/spinner'
 import { Zap, Bell, LogOut } from 'lucide-react'
@@ -21,12 +21,15 @@ import {
 } from '@/lib/alerts-repository'
 import { logSupabaseError } from '@/lib/supabase-errors'
 import { supabase } from '@/lib/supabase'
+import { formatTelegramUserLabel } from '@/lib/telegram-identity'
 
 const TELEGRAM_STORAGE_KEY = 'stockalert_telegram_user'
 
 interface TelegramUser {
+  /** Stored identity (username, display name, or user_<chatId>). */
   username: string
   chatId: string
+  isTelegramUsername?: boolean
 }
 
 function readTelegramUserFromStorage(): TelegramUser | null {
@@ -43,7 +46,14 @@ function readTelegramUserFromStorage(): TelegramUser | null {
       typeof (parsed as TelegramUser).username === 'string' &&
       typeof (parsed as TelegramUser).chatId === 'string'
     ) {
-      return { username: (parsed as TelegramUser).username, chatId: (parsed as TelegramUser).chatId }
+      const u = parsed as TelegramUser
+      return {
+        username: u.username,
+        chatId: u.chatId,
+        ...(typeof u.isTelegramUsername === 'boolean'
+          ? { isTelegramUsername: u.isTelegramUsername }
+          : {}),
+      }
     }
   } catch {
     // ignore invalid storage
@@ -57,6 +67,7 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [alertsLoading, setAlertsLoading] = useState(false)
   const [connectModalState, setConnectModalState] = useState<'idle' | 'connecting'>('idle')
+  const [connectSession, setConnectSession] = useState<TelegramConnectSessionProps | null>(null)
   const connectTimerRef = useRef<number | null>(null)
   const createSectionRef = useRef<HTMLDivElement>(null)
   const [supabaseTest, setSupabaseTest] = useState<{
@@ -108,7 +119,8 @@ export default function Dashboard() {
   useEffect(() => {
     return () => {
       if (connectTimerRef.current != null) {
-        clearTimeout(connectTimerRef.current)
+        clearInterval(connectTimerRef.current)
+        connectTimerRef.current = null
       }
     }
   }, [])
@@ -118,28 +130,175 @@ export default function Dashboard() {
 
   const handleConnectTelegram = useCallback(() => {
     if (connectModalState === 'connecting') return
-    if (connectTimerRef.current != null) return
-    setConnectModalState('connecting')
-    const timerId = window.setTimeout(() => {
+    if (connectTimerRef.current != null) {
+      clearInterval(connectTimerRef.current)
       connectTimerRef.current = null
-      const user: TelegramUser = {
-        username: 'john_trader',
-        chatId: 'mock_telegram_chat_id',
-      }
+    }
+    setConnectModalState('connecting')
+    setConnectSession(null)
+    void (async () => {
+      const preparePath = '/api/telegram/connect?prepare=1'
       try {
-        localStorage.setItem(TELEGRAM_STORAGE_KEY, JSON.stringify(user))
-      } catch {
-        // ignore quota / private mode
+        let res: Response
+        try {
+          res = await fetch(preparePath, { cache: 'no-store' })
+        } catch (err) {
+          console.error('[dashboard] Telegram prepare fetch failed', {
+            requestPath: preparePath,
+            resolvedUrl: new URL(preparePath, window.location.origin).href,
+            err,
+          })
+          setConnectModalState('idle')
+          setConnectSession(null)
+          return
+        }
+
+        const raw = await res.text()
+        let data: {
+          ok?: boolean
+          pollKey?: string
+          startCommand?: string
+          telegramWebUrl?: string
+          error?: string
+        }
+        try {
+          data = JSON.parse(raw) as {
+            ok?: boolean
+            pollKey?: string
+            startCommand?: string
+            telegramWebUrl?: string
+            error?: string
+          }
+        } catch {
+          console.error('[dashboard] Telegram prepare: expected JSON', {
+            status: res.status,
+            bodyPreview: raw.slice(0, 400),
+          })
+          setConnectModalState('idle')
+          setConnectSession(null)
+          return
+        }
+
+        if (
+          !res.ok ||
+          data.ok !== true ||
+          !data.pollKey ||
+          !data.startCommand ||
+          !data.telegramWebUrl
+        ) {
+          console.error('[dashboard] Telegram prepare failed', data.error ?? res.status, data)
+          setConnectModalState('idle')
+          setConnectSession(null)
+          return
+        }
+        setConnectSession({
+          pollKey: data.pollKey,
+          startCommand: data.startCommand,
+          telegramWebUrl: data.telegramWebUrl,
+        })
+        const started = Date.now()
+        const pollKey = data.pollKey
+        const iv = window.setInterval(() => {
+          void (async () => {
+            if (Date.now() - started > 180_000) {
+              if (connectTimerRef.current != null) {
+                clearInterval(connectTimerRef.current)
+                connectTimerRef.current = null
+              }
+              setConnectModalState('idle')
+              setConnectSession(null)
+              return
+            }
+            const pollPath = `/api/telegram/connect?poll_key=${encodeURIComponent(pollKey)}`
+            try {
+              let pr: Response
+              try {
+                pr = await fetch(pollPath, { cache: 'no-store' })
+              } catch (err) {
+                console.error('[dashboard] Telegram poll fetch failed', {
+                  requestPath: pollPath,
+                  resolvedUrl: new URL(pollPath, window.location.origin).href,
+                  err,
+                })
+                return
+              }
+              const pollRaw = await pr.text()
+              let pjson: {
+                ok?: boolean
+                connected?: boolean
+                user?: {
+                  telegramChatId?: string
+                  telegramUsername?: string
+                  isTelegramUsername?: boolean
+                }
+                error?: string
+              }
+              try {
+                pjson = JSON.parse(pollRaw) as {
+                  ok?: boolean
+                  connected?: boolean
+                  user?: {
+                    telegramChatId?: string
+                    telegramUsername?: string
+                    isTelegramUsername?: boolean
+                  }
+                  error?: string
+                }
+              } catch {
+                console.error('[dashboard] Telegram poll: expected JSON', {
+                  status: pr.status,
+                  bodyPreview: pollRaw.slice(0, 400),
+                })
+                return
+              }
+              if (!pr.ok || pjson.ok === false) {
+                console.error('[dashboard] Telegram poll error', {
+                  status: pr.status,
+                  error: pjson.error,
+                })
+                return
+              }
+              if (pjson.ok === true && pjson.connected === true && pjson.user) {
+                const cid = pjson.user.telegramChatId
+                const un = pjson.user.telegramUsername
+                if (!cid || !un) return
+                if (connectTimerRef.current != null) {
+                  clearInterval(connectTimerRef.current)
+                  connectTimerRef.current = null
+                }
+                const user: TelegramUser = {
+                  chatId: String(cid),
+                  username: String(un),
+                  ...(typeof pjson.user.isTelegramUsername === 'boolean'
+                    ? { isTelegramUsername: pjson.user.isTelegramUsername }
+                    : {}),
+                }
+                try {
+                  localStorage.setItem(TELEGRAM_STORAGE_KEY, JSON.stringify(user))
+                } catch {
+                  // ignore quota / private mode
+                }
+                setTelegramUser(user)
+                setConnectModalState('idle')
+                setConnectSession(null)
+              }
+            } catch (e) {
+              console.error('[dashboard] Telegram poll failed', e)
+            }
+          })()
+        }, 2000)
+        connectTimerRef.current = iv
+      } catch (e) {
+        console.error('[dashboard] Telegram connect failed', e)
+        setConnectModalState('idle')
+        setConnectSession(null)
       }
-      setTelegramUser(user)
-      setConnectModalState('idle')
-    }, 1000)
-    connectTimerRef.current = timerId
+    })()
   }, [connectModalState])
 
   const handleSignOut = useCallback(() => {
     if (connectTimerRef.current != null) {
-      clearTimeout(connectTimerRef.current)
+      clearInterval(connectTimerRef.current)
       connectTimerRef.current = null
     }
     try {
@@ -149,6 +308,7 @@ export default function Dashboard() {
     }
     setTelegramUser(null)
     setConnectModalState('idle')
+    setConnectSession(null)
   }, [])
 
   const handleCreateAlert = useCallback(
@@ -156,6 +316,7 @@ export default function Dashboard() {
       if (!telegramUser) return
       try {
         await insertAlertForTelegramUser(telegramUser.chatId, telegramUser.username, {
+          instrument_key: data.instrumentKey,
           stock_symbol: data.stockSymbol,
           stock_name: data.stockName,
           exchange: data.exchange,
@@ -277,6 +438,8 @@ export default function Dashboard() {
           state={connectModalState}
           onConnect={handleConnectTelegram}
           allowConnect={hydrated}
+          telegramBotUsername={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
+          connectSession={connectSession}
         />
       )}
 
@@ -295,7 +458,12 @@ export default function Dashboard() {
             {telegramConnected && telegramUser && (
               <Badge className="bg-green-500/20 text-green-400 border-green-500/30 flex items-center gap-1.5 text-xs">
                 <div className="w-2 h-2 rounded-full bg-green-400" />
-                Connected as @{telegramUser.username}
+                Connected as{' '}
+                {formatTelegramUserLabel(
+                  telegramUser.username,
+                  telegramUser.chatId,
+                  telegramUser.isTelegramUsername,
+                )}
               </Badge>
             )}
             <Button variant="ghost" size="sm" onClick={handleSignOut} className="flex items-center gap-2">
