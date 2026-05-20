@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StockAutocomplete } from './stock-autocomplete'
+import { OptionsAlertFields, type OptionsAlertSelection } from './options-alert-fields'
 import { Plus } from 'lucide-react'
-import type { AlertCondition } from '@/types/alert'
+import type { AlertCondition, MarketType, OptionType } from '@/types/alert'
 import type { SelectedInstrumentStock } from '@/types/instrument'
 
 export interface CreateAlertFormPayload {
@@ -19,6 +21,12 @@ export interface CreateAlertFormPayload {
   targetPrice: number
   condition: AlertCondition
   validUntil: string | null
+  marketType?: MarketType
+  underlyingSymbol?: string | null
+  expiryDate?: string | null
+  strikePrice?: number | null
+  optionType?: OptionType | null
+  alertType?: 'price'
 }
 
 interface CreateAlertFormProps {
@@ -27,63 +35,100 @@ interface CreateAlertFormProps {
 }
 
 export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertFormProps) {
+  const [marketTab, setMarketTab] = useState<'stocks' | 'options'>('stocks')
   const [selectedStock, setSelectedStock] = useState<SelectedInstrumentStock | null>(null)
+  const [optionSelection, setOptionSelection] = useState<OptionsAlertSelection | null>(null)
   const [targetPrice, setTargetPrice] = useState('')
   const [condition, setCondition] = useState<AlertCondition>('above')
   const [validUntil, setValidUntil] = useState('')
 
-  const handleQuickTarget = (type: string) => {
-    if (!selectedStock) return
+  const handleOptionSelectionChange = useCallback((sel: OptionsAlertSelection | null) => {
+    setOptionSelection(sel)
+  }, [])
 
+  const handleQuickTarget = (type: string, basePrice: number) => {
     let price = 0
     switch (type) {
       case '+1%':
-        price = selectedStock.price * 1.01
+        price = basePrice * 1.01
         break
       case '+2%':
-        price = selectedStock.price * 1.02
+        price = basePrice * 1.02
         break
       case 'high':
-        price = selectedStock.price * 1.05
+        price = basePrice * 1.05
         setCondition('above')
         break
       case 'low':
-        price = selectedStock.price * 0.95
+        price = basePrice * 0.95
         setCondition('below')
         break
     }
     setTargetPrice(price.toFixed(2))
   }
 
+  const resetForm = () => {
+    setSelectedStock(null)
+    setOptionSelection(null)
+    setTargetPrice('')
+    setCondition('above')
+    setValidUntil('')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!telegramConnected || !selectedStock || !targetPrice) return
+    if (!telegramConnected || !targetPrice) return
     const parsedTarget = parseFloat(targetPrice)
     if (Number.isNaN(parsedTarget) || parsedTarget <= 0) return
 
-    const payload: CreateAlertFormPayload = {
-      instrumentKey: selectedStock.instrumentKey,
-      stockSymbol: selectedStock.symbol,
-      stockName: selectedStock.company,
-      exchange: selectedStock.exchange,
-      currentPrice: selectedStock.price,
-      targetPrice: parsedTarget,
-      condition,
-      validUntil: validUntil.trim() === '' ? null : validUntil.trim(),
+    let payload: CreateAlertFormPayload | null = null
+
+    if (marketTab === 'stocks') {
+      if (!selectedStock) return
+      payload = {
+        instrumentKey: selectedStock.instrumentKey,
+        stockSymbol: selectedStock.symbol,
+        stockName: selectedStock.company,
+        exchange: selectedStock.exchange,
+        currentPrice: selectedStock.price,
+        targetPrice: parsedTarget,
+        condition,
+        validUntil: validUntil.trim() === '' ? null : validUntil.trim(),
+        marketType: 'equity',
+      }
+    } else {
+      if (!optionSelection) return
+      payload = {
+        instrumentKey: optionSelection.instrumentKey,
+        stockSymbol: optionSelection.tradingSymbol,
+        stockName: optionSelection.stockName,
+        exchange: 'NSE',
+        currentPrice: optionSelection.currentPrice,
+        targetPrice: parsedTarget,
+        condition,
+        validUntil: validUntil.trim() === '' ? null : validUntil.trim(),
+        marketType: 'option',
+        underlyingSymbol: optionSelection.underlyingSymbol,
+        expiryDate: optionSelection.expiryDate,
+        strikePrice: optionSelection.strikePrice,
+        optionType: optionSelection.optionType,
+        alertType: 'price',
+      }
     }
 
     try {
       await onSubmit?.(payload)
-      setSelectedStock(null)
-      setTargetPrice('')
-      setCondition('above')
-      setValidUntil('')
+      resetForm()
     } catch {
       // Parent logs; keep form values so the user can retry.
     }
   }
 
-  const canSubmit = telegramConnected && selectedStock && targetPrice.length > 0
+  const stockReady = marketTab === 'stocks' && selectedStock
+  const optionReady = marketTab === 'options' && optionSelection
+  const canSubmit = telegramConnected && (stockReady || optionReady) && targetPrice.length > 0
+  const quickBasePrice =
+    marketTab === 'stocks' ? selectedStock?.price : optionSelection?.currentPrice
 
   return (
     <Card className="border-border bg-card">
@@ -100,44 +145,52 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
           </p>
         )}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Select Stock</Label>
-            <StockAutocomplete onSelect={setSelectedStock} selectedStock={selectedStock} />
-          </div>
+          <Tabs
+            value={marketTab}
+            onValueChange={(v) => {
+              setMarketTab(v as 'stocks' | 'options')
+              setTargetPrice('')
+            }}
+          >
+            <TabsList className="w-full grid grid-cols-2">
+              <TabsTrigger value="stocks" className="w-full">
+                Stocks
+              </TabsTrigger>
+              <TabsTrigger value="options" className="w-full">
+                Options
+              </TabsTrigger>
+            </TabsList>
 
-          {selectedStock && (
+            <TabsContent value="stocks" className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Select Stock</Label>
+                <StockAutocomplete onSelect={setSelectedStock} selectedStock={selectedStock} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="options" className="mt-4">
+              <OptionsAlertFields
+                disabled={!telegramConnected}
+                onSelectionChange={handleOptionSelectionChange}
+              />
+            </TabsContent>
+          </Tabs>
+
+          {(stockReady || optionReady) && quickBasePrice != null && (
             <>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Quick Targets</Label>
                 <div className="grid grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTarget('+1%')}
-                    className="py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors border border-border"
-                  >
-                    +1%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTarget('+2%')}
-                    className="py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors border border-border"
-                  >
-                    +2%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTarget('high')}
-                    className="py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors border border-border"
-                  >
-                    Day High
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTarget('low')}
-                    className="py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors border border-border"
-                  >
-                    Day Low
-                  </button>
+                  {(['+1%', '+2%', 'high', 'low'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleQuickTarget(t, quickBasePrice)}
+                      className="py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors border border-border"
+                    >
+                      {t === 'high' ? 'Day High' : t === 'low' ? 'Day Low' : t}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -203,9 +256,13 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
             </>
           )}
 
-          {!selectedStock && (
+          {!stockReady && !optionReady && (
             <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground">Select a stock to create an alert</p>
+              <p className="text-sm text-muted-foreground">
+                {marketTab === 'stocks'
+                  ? 'Select a stock to create an alert'
+                  : 'Select underlying, expiry, strike, and CE/PE'}
+              </p>
             </div>
           )}
         </form>

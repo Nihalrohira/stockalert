@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { logSupabaseError } from '@/lib/supabase-errors'
-import type { AlertCondition, DbAlertRow } from '@/types/alert'
+import type { AlertCondition, AlertTypeKind, DbAlertRow, MarketType, OptionType } from '@/types/alert'
 
 function parseNum(v: unknown): number | null {
   if (typeof v === 'number' && !Number.isNaN(v)) return v
@@ -17,6 +17,21 @@ function isAlertCondition(v: unknown): v is AlertCondition {
 
 function isAlertStatus(v: unknown): v is DbAlertRow['status'] {
   return v === 'active' || v === 'paused' || v === 'triggered'
+}
+
+function parseMarketType(v: unknown): MarketType {
+  if (v === 'option') return 'option'
+  return 'equity'
+}
+
+function parseOptionType(v: unknown): OptionType | null {
+  if (v === 'CE' || v === 'PE') return v
+  return null
+}
+
+function parseAlertType(v: unknown): AlertTypeKind {
+  if (v === 'price') return 'price'
+  return 'price'
 }
 
 function parseDbAlertRow(raw: unknown): DbAlertRow | null {
@@ -38,6 +53,12 @@ function parseDbAlertRow(raw: unknown): DbAlertRow | null {
   if (r.valid_until !== null && typeof r.valid_until !== 'string') return null
   if (r.triggered_at !== null && typeof r.triggered_at !== 'string') return null
 
+  const strikeRaw = r.strike_price
+  const strike_price =
+    strikeRaw === null || strikeRaw === undefined
+      ? null
+      : parseNum(strikeRaw)
+
   return {
     id: r.id,
     user_id: r.user_id,
@@ -52,6 +73,17 @@ function parseDbAlertRow(raw: unknown): DbAlertRow | null {
     status: r.status,
     created_at: r.created_at,
     triggered_at: r.triggered_at as string | null,
+    market_type: parseMarketType(r.market_type),
+    underlying_symbol:
+      typeof r.underlying_symbol === 'string' && r.underlying_symbol.trim() !== ''
+        ? r.underlying_symbol.trim()
+        : null,
+    expiry_date:
+      typeof r.expiry_date === 'string' && r.expiry_date.trim() !== '' ? r.expiry_date.trim() : null,
+    strike_price,
+    option_type: parseOptionType(r.option_type),
+    alert_type: parseAlertType(r.alert_type),
+    timeframe: typeof r.timeframe === 'string' && r.timeframe.trim() !== '' ? r.timeframe.trim() : null,
   }
 }
 
@@ -151,21 +183,31 @@ export async function fetchActiveAndPausedAlertsForUser(
   return (data ?? []).map(parseDbAlertRow).filter((x): x is DbAlertRow => x !== null)
 }
 
+export type InsertAlertInput = {
+  instrument_key: string
+  stock_symbol: string
+  stock_name: string
+  exchange: 'NSE' | 'BSE'
+  current_price: number
+  target_price: number
+  condition: AlertCondition
+  valid_until: string | null
+  market_type?: MarketType
+  underlying_symbol?: string | null
+  expiry_date?: string | null
+  strike_price?: number | null
+  option_type?: OptionType | null
+  alert_type?: AlertTypeKind
+  timeframe?: string | null
+}
+
 export async function insertAlertForTelegramUser(
   telegramChatId: string,
   telegramUsername: string,
-  input: {
-    instrument_key: string
-    stock_symbol: string
-    stock_name: string
-    exchange: 'NSE' | 'BSE'
-    current_price: number
-    target_price: number
-    condition: AlertCondition
-    valid_until: string | null
-  }
+  input: InsertAlertInput,
 ): Promise<DbAlertRow> {
   const userId = await findOrCreateUserId(telegramChatId, telegramUsername)
+  const market_type = input.market_type ?? 'equity'
 
   const { data, error } = await supabase
     .from('alerts')
@@ -181,6 +223,13 @@ export async function insertAlertForTelegramUser(
       valid_until: input.valid_until,
       status: 'active',
       triggered_at: null,
+      market_type,
+      underlying_symbol: input.underlying_symbol ?? null,
+      expiry_date: input.expiry_date ?? null,
+      strike_price: input.strike_price ?? null,
+      option_type: input.option_type ?? null,
+      alert_type: input.alert_type ?? 'price',
+      timeframe: input.timeframe ?? null,
     })
     .select('*')
     .single()

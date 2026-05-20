@@ -16,5 +16,13 @@ export function dbAlertRowToUi(row: DbAlertRow, telegramChatId: string): Alert {
     status: row.status,
     createdAt: row.created_at,
     triggeredAt: row.status === 'triggered' ? row.triggered_at : null,
+    marketType: row.market_type,
+    underlyingSymbol: row.underlying_symbol,
+    expiryDate: row.expiry_date,
+    strikePrice: row.strike_price,
+    optionType: row.option_type,
+    alertType: row.alert_type,
+    timeframe: row.timeframe,
   }
 }
+

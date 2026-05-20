@@ -309,6 +309,12 @@ export default function Dashboard() {
           target_price: data.targetPrice,
           condition: data.condition,
           valid_until: data.validUntil,
+          market_type: data.marketType ?? 'equity',
+          underlying_symbol: data.underlyingSymbol ?? null,
+          expiry_date: data.expiryDate ?? null,
+          strike_price: data.strikePrice ?? null,
+          option_type: data.optionType ?? null,
+          alert_type: data.alertType ?? 'price',
         })
         await loadAlerts(false)
       } catch (e) {
