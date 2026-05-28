@@ -25,7 +25,7 @@ export function TelegramOnboardingModal({
   telegramBotUsername,
   connectSession = null,
 }: TelegramOnboardingModalProps) {
-  const botDisplay = (telegramBotUsername ?? 'your_bot').replace(/^@/, '')
+  const botDisplay = (telegramBotUsername ?? 'stock915_bot').replace(/^@/, '')
   const deepLinkUrl = connectSession?.deepLinkUrl ?? ''
   const telegramWebUrl =
     connectSession?.telegramWebUrl ?? `https://web.telegram.org/k/#@${botDisplay}`
@@ -67,20 +67,20 @@ export function TelegramOnboardingModal({
             </div>
             <h2 className="text-2xl font-bold text-foreground">Connect Telegram</h2>
             <p className="text-sm text-muted-foreground">
-              Telegram is required to receive instant stock price alerts
+              Connect Telegram to receive instant stock alerts.
             </p>
           </div>
 
           {showConnecting ? (
             <div className="space-y-4">
               <p className="text-sm font-medium text-foreground text-center">
-                Telegram will open. Click OPEN IN WEB, then press Start in the bot chat.
+                Telegram opens next. Choose OPEN IN WEB, then tap Start in the bot chat.
               </p>
               <Button type="button" variant="secondary" className="w-full" onClick={openDeepLink}>
                 Open Telegram Again
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                Using Telegram Web instead?{' '}
+                Prefer Telegram Web?{' '}
                 <a
                   href={telegramWebUrl}
                   target="_blank"
@@ -95,7 +95,7 @@ export function TelegramOnboardingModal({
           ) : showPreparing ? (
             <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-3">
               <Loader className="w-5 h-5 text-primary animate-spin shrink-0" />
-              <p className="text-sm text-foreground">Opening Telegram…</p>
+              <p className="text-sm text-foreground">Opening Telegram...</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -107,9 +107,10 @@ export function TelegramOnboardingModal({
                   <div className="w-0.5 h-12 bg-border mt-2" />
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Open Telegram Web</p>
+                  <p className="font-medium text-foreground">Open Telegram</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    We open Telegram with our bot so you can link your account.
+                    We open the <span className="font-mono text-foreground">@{botDisplay}</span> chat so you can
+                    securely link your account.
                   </p>
                 </div>
               </div>
@@ -124,7 +125,7 @@ export function TelegramOnboardingModal({
                 <div className="pt-1">
                   <p className="font-medium text-foreground">OPEN IN WEB, then Start</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    On the Telegram page, choose OPEN IN WEB, then press Start in the chat with{' '}
+                    On Telegram, choose OPEN IN WEB, then press Start in the chat with{' '}
                     <span className="font-mono text-foreground">@{botDisplay}</span>.
                   </p>
                 </div>
@@ -137,9 +138,9 @@ export function TelegramOnboardingModal({
                   </div>
                 </div>
                 <div className="pt-1">
-                  <p className="font-medium text-foreground">Return here</p>
+                  <p className="font-medium text-foreground">Return to 915 Stock Alerts</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    This page connects automatically after you press Start.
+                    Connection completes automatically right after you press Start.
                   </p>
                 </div>
               </div>
@@ -149,7 +150,7 @@ export function TelegramOnboardingModal({
           {state === 'connecting' && connectSession && (
             <div className="bg-muted/50 rounded-lg p-4 flex items-center gap-3">
               <Loader className="w-5 h-5 text-primary animate-spin shrink-0" />
-              <p className="text-sm text-foreground">Confirming your connection…</p>
+              <p className="text-sm text-foreground">Confirming your connection...</p>
             </div>
           )}
 
@@ -161,10 +162,10 @@ export function TelegramOnboardingModal({
             {state === 'connecting' ? (
               <>
                 <Loader className="w-4 h-4 mr-2 animate-spin" />
-                Please wait...
+                Connecting...
               </>
             ) : (
-              'Open Telegram Web'
+              'Connect Telegram'
             )}
           </Button>
         </div>

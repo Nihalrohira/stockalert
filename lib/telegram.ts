@@ -111,7 +111,7 @@ export function formatTriggeredAlertTelegramMessage(params: {
   const cur = params.currentPrice.toFixed(2)
   const when = escapeHtmlForTelegram(params.triggeredAtLocal)
   return [
-    '🚨 <b>Stock Alert Triggered</b>',
+    '🚨 <b>915 Stock Alerts Triggered</b>',
     '',
     `<b>Stock:</b> ${stock}`,
     `<b>Condition:</b> ${cond}`,

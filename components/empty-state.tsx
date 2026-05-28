@@ -17,13 +17,13 @@ export function EmptyState({ type, onCreateAlert }: EmptyStateProps) {
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-2">No Active Alerts</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Create your first price alert to start monitoring stocks
+          Create your first alert rule to start monitoring the market.
         </p>
         <Button
           onClick={onCreateAlert}
           className="bg-primary text-primary-foreground hover:opacity-90"
         >
-          Create Your First Alert
+          Create First Alert Rule
         </Button>
       </div>
     )
@@ -38,7 +38,7 @@ export function EmptyState({ type, onCreateAlert }: EmptyStateProps) {
       </div>
       <h3 className="text-lg font-semibold text-foreground mb-2">No Triggered Alerts</h3>
       <p className="text-sm text-muted-foreground">
-        When your price alerts reach their targets, you&apos;ll see them here
+        Triggered alerts from 915 Stock Alerts appear here in real time.
       </p>
     </div>
   )

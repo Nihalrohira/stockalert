@@ -141,7 +141,7 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
       <CardContent className="pt-6">
         {!telegramConnected && (
           <p className="text-sm text-muted-foreground mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2">
-            Connect Telegram to create alerts. Alerts are tied to your Telegram account.
+            Connect Telegram to receive instant stock alerts.
           </p>
         )}
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
@@ -251,7 +251,7 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
                 disabled={!canSubmit}
                 className="w-full bg-primary text-primary-foreground hover:opacity-90 h-10 font-medium disabled:opacity-50"
               >
-                Create Alert
+                Create Alert Rule
               </Button>
             </>
           )}
@@ -260,7 +260,7 @@ export function CreateAlertForm({ telegramConnected, onSubmit }: CreateAlertForm
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground">
                 {marketTab === 'stocks'
-                  ? 'Select a stock to create an alert'
+                  ? 'Select a stock to create an alert rule'
                   : 'Select underlying, expiry, strike, and CE/PE'}
               </p>
             </div>

@@ -24,7 +24,8 @@ import { supabase } from '@/lib/supabase'
 import { formatTelegramUserLabel } from '@/lib/telegram-identity'
 import { buildTelegramBotDeepLink, buildTelegramWebUrl } from '@/lib/telegram-deep-link'
 
-const TELEGRAM_STORAGE_KEY = 'stockalert_telegram_user'
+const TELEGRAM_STORAGE_KEY = 'stock915_alerts_telegram_user'
+const LEGACY_TELEGRAM_STORAGE_KEY = 'stockalert_telegram_user'
 
 interface TelegramUser {
   /** Stored identity (username, display name, or user_<chatId>). */
@@ -36,7 +37,8 @@ interface TelegramUser {
 function readTelegramUserFromStorage(): TelegramUser | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(TELEGRAM_STORAGE_KEY)
+    const raw =
+      localStorage.getItem(TELEGRAM_STORAGE_KEY) ?? localStorage.getItem(LEGACY_TELEGRAM_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as unknown
     if (
@@ -260,6 +262,7 @@ export default function Dashboard() {
                 }
                 try {
                   localStorage.setItem(TELEGRAM_STORAGE_KEY, JSON.stringify(user))
+                  localStorage.removeItem(LEGACY_TELEGRAM_STORAGE_KEY)
                 } catch {
                   // ignore quota / private mode
                 }
@@ -288,6 +291,7 @@ export default function Dashboard() {
     }
     try {
       localStorage.removeItem(TELEGRAM_STORAGE_KEY)
+      localStorage.removeItem(LEGACY_TELEGRAM_STORAGE_KEY)
     } catch {
       // ignore
     }
@@ -441,8 +445,8 @@ export default function Dashboard() {
               <Zap className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">StockAlert</h1>
-              <p className="text-xs text-muted-foreground">Indian Stock Price Alerts</p>
+              <h1 className="text-2xl font-bold text-foreground">915 Stock Alerts</h1>
+              <p className="text-xs text-muted-foreground">Fast, trusted market alerts for India</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -467,7 +471,7 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div ref={createSectionRef} className="mb-8">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Create Alert</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Create Alert Rule</h2>
           <CreateAlertForm telegramConnected={telegramConnected} onSubmit={handleCreateAlert} />
         </div>
 
@@ -477,7 +481,7 @@ export default function Dashboard() {
             aria-live="polite"
           >
             <Spinner className="size-5" />
-            Loading alerts…
+            Loading your alert feed...
           </div>
         )}
 

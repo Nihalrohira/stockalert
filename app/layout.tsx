@@ -9,8 +9,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Stock Alert Dashboard',
-  description: 'Monitor Indian stocks and receive Telegram alerts',
+  title: '915 Stock Alerts',
+  description: 'Premium Telegram-first dashboard for fast Indian market alerts.',
   generator: 'v0.app',
   icons: {
     icon: [

@@ -4,7 +4,7 @@ const INSTRUMENT_MASTER_URL =
   'https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz'
 
 const FETCH_HEADERS = {
-  'User-Agent': 'StockAlert/1.0 (https://github.com/; Next.js server)',
+  'User-Agent': '915StockAlerts/1.0 (https://github.com/; Next.js server)',
   Accept: '*/*',
 } as const
 

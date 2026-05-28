@@ -38,7 +38,7 @@ export function TelegramConnection({
           </div>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-4">
-          <p>Alerts will be sent to your Telegram account.</p>
+          <p>915 Stock Alerts sends alerts to your Telegram account.</p>
           <Button 
             variant="outline" 
             size="sm" 
@@ -84,7 +84,7 @@ export function TelegramConnection({
             Connect Telegram
           </CardTitle>
           <Badge variant="outline" className="text-xs">
-            Optional
+            Required
           </Badge>
         </div>
       </CardHeader>
@@ -92,13 +92,13 @@ export function TelegramConnection({
         {!showConnectFlow ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Receive price alerts directly on Telegram. Connect your account to get started.
+              Connect Telegram to receive instant stock alerts.
             </p>
             <Button
               onClick={() => setShowConnectFlow(true)}
               className="w-full bg-primary text-primary-foreground hover:opacity-90"
             >
-              Start Connection
+              Connect Telegram
             </Button>
           </>
         ) : (
@@ -109,9 +109,9 @@ export function TelegramConnection({
                 <div className="text-sm space-y-2">
                   <p className="font-medium text-foreground">Steps to connect:</p>
                   <ol className="space-y-1 text-muted-foreground list-decimal list-inside text-xs">
-                    <li>Open Telegram and search for @StockAlertBot</li>
-                    <li>Send /start command to the bot</li>
-                    <li>Click the connection link from the bot</li>
+                    <li>Open Telegram and search for @stock915_bot</li>
+                    <li>Send /start to the bot</li>
+                    <li>Open the connection link from the bot</li>
                     <li>You&apos;re all set!</li>
                   </ol>
                 </div>
@@ -140,7 +140,7 @@ export function TelegramConnection({
                   }, 1500)
                 }}
               >
-                {isConnecting ? 'Connecting...' : 'Connected'}
+                {isConnecting ? 'Connecting...' : 'Finish Connection'}
               </Button>
             </div>
           </div>
