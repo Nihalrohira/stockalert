@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, Trash2, PauseCircle, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Alert } from '@/types/alert'
+import { getAlertPrimaryLabel, getAlertSecondaryLabel } from '@/lib/alert-display'
 
 function formatDisplayDate(isoOrYmd: string | null): string {
   if (!isoOrYmd) return '—'
@@ -52,7 +53,7 @@ export function AlertsTable(props: AlertsTableProps) {
               <thead className="sticky top-0 bg-muted/50 border-b border-border z-20">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Stock
+                    Instrument
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Trigger Price
@@ -73,8 +74,10 @@ export function AlertsTable(props: AlertsTableProps) {
                   <tr key={alert.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <span className="font-semibold text-foreground text-sm">{alert.stockSymbol}</span>
-                        <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px] truncate">{alert.stockName}</p>
+                        <span className="font-semibold text-foreground text-sm">{getAlertPrimaryLabel(alert)}</span>
+                        <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px] truncate">
+                          {getAlertSecondaryLabel(alert)}
+                        </p>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -109,7 +112,7 @@ export function AlertsTable(props: AlertsTableProps) {
             <thead className="sticky top-0 bg-muted/50 border-b border-border z-20">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Stock
+                  Instrument
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Current Price
@@ -137,12 +140,14 @@ export function AlertsTable(props: AlertsTableProps) {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-foreground text-sm">{alert.stockSymbol}</span>
+                        <span className="font-semibold text-foreground text-sm">{getAlertPrimaryLabel(alert)}</span>
                         <Badge variant="outline" className="text-[10px]">
-                          {alert.exchange}
+                          {alert.marketType === 'option' ? 'OPT' : alert.exchange}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 max-w-[220px] truncate">{alert.stockName}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 max-w-[220px] truncate">
+                        {getAlertSecondaryLabel(alert)}
+                      </p>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
